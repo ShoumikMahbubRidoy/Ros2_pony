@@ -1,0 +1,8 @@
+sensor_msgs/JointState,/joint_target
+timestamp,front_left_hip,front_left_thigh,front_left_calf,front_right_hip,front_right_thigh,front_right_calf,rear_left_hip,rear_left_thigh,rear_left_calf,rear_right_hip,rear_right_thigh,rear_right_calf
+0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+0.5,0.0,0.1,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+1.0,0.0,0.2,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+1.5,0.0,0.3,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+2.0,0.0,0.4,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0
+2.5,0.0,0.5,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0,0.0 

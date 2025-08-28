@@ -1,0 +1,23 @@
+# ROS2 Pony Project Dependencies
+# Core dependencies for CAN communication and ROS2 development
+
+# CAN communication
+python-can==4.5.0
+
+# ROS2 message types
+can-msgs==2.0.0
+
+# Development and testing
+typeguard==4.4.4
+typing_extensions==4.14.1
+
+# Utilities
+PyYAML==6.0.2
+msgpack==1.1.1
+Jinja2==3.1.6
+MarkupSafe==3.0.2
+packaging==25.0
+wrapt==1.17.2
+
+# Note: ROS2 system packages are installed via apt and colcon
+# This file contains only project-specific Python dependencies

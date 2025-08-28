@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+
+from launch import LaunchDescription
+from launch_ros.actions import Node
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import LaunchConfiguration
+
+
+def generate_launch_description():
+    """motor_feedbackサマリー機能のテスト用launchファイル."""
+    
+    # パラメータ
+    max_velocity_arg = DeclareLaunchArgument(
+        'max_velocity',
+        default_value='1000.0',
+        description='Maximum motor velocity [ERPM]'
+    )
+    
+    max_acceleration_arg = DeclareLaunchArgument(
+        'max_acceleration',
+        default_value='1000.0',
+        description='Maximum motor acceleration [ERPM/s²]'
+    )
+    
+    can_send_frequency_arg = DeclareLaunchArgument(
+        'can_send_frequency',
+        default_value='10.0',
+        description='CAN send frequency [Hz]'
+    )
+    
+    status_publish_frequency_arg = DeclareLaunchArgument(
+        'status_publish_frequency',
+        default_value='1.0',
+        description='Status publish frequency [Hz]'
+    )
+    
+    # MotionPlannerNode
+    motion_planner_node = Node(
+        package='ros2_pony',
+        executable='motion_planner_node',
+        name='motion_planner_node',
+        output='screen',
+        parameters=[{
+            'max_velocity': LaunchConfiguration('max_velocity'),
+            'max_acceleration': LaunchConfiguration('max_acceleration'),
+            'can_send_frequency': LaunchConfiguration('can_send_frequency'),
+            'status_publish_frequency': LaunchConfiguration('status_publish_frequency'),
+        }]
+    )
+    
+    # MotorFeedbackSummaryTester
+    motor_feedback_tester = Node(
+        package='ros2_pony',
+        executable='test_motor_feedback_summary.py',
+        name='motor_feedback_summary_tester',
+        output='screen'
+    )
+    
+    return LaunchDescription([
+        max_velocity_arg,
+        max_acceleration_arg,
+        can_send_frequency_arg,
+        status_publish_frequency_arg,
+        motion_planner_node,
+        motor_feedback_tester,
+    ]) 
