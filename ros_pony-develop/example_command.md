@@ -1,6 +1,10 @@
 - drive_usb2can_node
 ```
+# 0x68を動かす
 ros2 topic pub -1 /can_send can_msgs/msg/Frame "{id: 1640, dlc: 8, data: [255, 0, 0, 0, 0, 255, 0, 255], is_error: false, is_rtr: false, is_extended: false}"
+
+# 0x68の初期位置オフセットをリセット
+ros2 topic pub -1 /can_send can_msgs/msg/Frame "{id: 1384, dlc: 8, data: [1,0,0,0,0,0,0,0], is_error: false, is_rtr: false, is_extended: false}"
 ```
 
 - joint_can_converter

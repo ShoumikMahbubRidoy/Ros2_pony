@@ -19,6 +19,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "ros2_pony/msg/InitializationStatus.msg"
   "ros2_pony/msg/AimDegree.msg"
   "ros2_pony/msg/MotorFeedbackArray.msg"
+  "ros2_pony/msg/JointNames.msg"
   DEPENDENCIES can_msgs sensor_msgs std_srvs
 )
 

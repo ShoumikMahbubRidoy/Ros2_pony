@@ -21,6 +21,7 @@ ROS2開発用のリポジトリです。
 - Python 3.12+
 - CMake 3.28+
 - colcon ビルドシステム
+- ROS2メッセージパッケージ（can-msgs等）
 
 ## セットアップ手順
 
@@ -42,12 +43,17 @@ python3 -m venv venv
 # 仮想環境の有効化
 source venv/bin/activate
 
-# 依存関係のインストール
+# Python依存関係のインストール
 pip install -r requirements.txt
+
+# 注意: requirements.txtにはプロジェクト固有のパッケージのみが含まれています
+# ROS2メッセージパッケージは別途システムパッケージとしてインストールしてください
 
 # 仮想環境の無効化（必要に応じて）
 deactivate
 ```
+
+**注意**: `requirements.txt`にはプロジェクト固有のPythonパッケージのみが含まれています。ROS2メッセージパッケージ（can-msgs等）は別途システムパッケージとしてインストールする必要があります。
 
 **注意**: 仮想環境を使用する際は、必ず以下のコマンドで有効化してから作業してください：
 
@@ -66,6 +72,9 @@ sudo apt update && sudo apt upgrade
 
 # 開発に必要なツールのインストール
 sudo apt install python3-colcon-common-extensions python3-vcstool
+
+# ROS2メッセージパッケージのインストール
+sudo apt install ros-jazzy-can-msgs
 ```
 
 ### 4. ワークスペースの確認
@@ -169,6 +178,19 @@ QoS設定の不一致による問題が発生した場合：
 source venv/bin/activate
 ```
 
+### 実機動作で使用しているコマンド
+
+```bash
+# bash 1
+./cannode_wakeup.sh
+
+# bash 2
+./node_wakeup.sh
+
+# bash 3 ROSプロセスを終了させるとき
+./kill_ros_node.sh
+```
+
 ### 基本的なROS2コマンド
 
 ```bash
@@ -240,6 +262,7 @@ colcon build --cmake-args -DCMAKE_EXPORT_COMPILE_COMMANDS=1
 ## テスト
 
 このプロジェクトでは、ユニットテストと統合テストの両方を実装しています。
+※現在テストは使用しておりません。
 
 ### テストの種類
 
@@ -476,8 +499,32 @@ ros_pony/
 ├── build/                 # ビルドファイル（.gitignoreで除外）
 ├── install/               # インストールファイル（.gitignoreで除外）
 ├── log/                   # ログファイル（.gitignoreで除外）
+├── requirements.txt       # Python依存関係（ROS2メッセージパッケージは含まれない）
 └── README.md             # このファイル
 ```
+
+## 依存関係の管理
+
+### Pythonパッケージ
+- `requirements.txt`で管理
+- 仮想環境内にインストール
+- プロジェクト固有の依存関係のみを含む（ROS固有のパッケージは除外）
+- 例: `python-can`, `typeguard`, `PyYAML`等
+
+### ROS2システムパッケージ
+- `apt`パッケージマネージャーで管理
+- システム全体にインストール
+- 例: `ros-jazzy-can-msgs`, `ros-jazzy-sensor-msgs`等
+
+### インストール方法の違い
+- **Pythonパッケージ**: `pip install -r requirements.txt`
+- **ROS2システムパッケージ**: `sudo apt install ros-jazzy-<package-name>`
+
+### requirements.txtの管理方針
+- `pip freeze`の出力からROS固有のパッケージを除外
+- プロジェクト固有の依存関係のみを含む
+- ROS2メッセージパッケージはシステムパッケージとして管理
+- これにより、環境間での依存関係の一貫性を保つ
 
 ## トラブルシューティング
 
@@ -507,6 +554,18 @@ ros_pony/
    
    # 依存関係の確認
    rosdep check <package_name>
+   ```
+
+4. **ROS2メッセージパッケージのインポートエラー**
+   ```bash
+   # システムパッケージの確認
+   dpkg -l | grep ros-jazzy-<package-name>
+   
+   # 不足しているパッケージのインストール
+   sudo apt install ros-jazzy-<package-name>
+   
+   # 例: can-msgsが不足している場合
+   sudo apt install ros-jazzy-can-msgs
    ```
 
 ## 開発ガイドライン

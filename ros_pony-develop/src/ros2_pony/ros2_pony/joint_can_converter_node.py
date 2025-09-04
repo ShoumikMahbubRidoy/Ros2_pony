@@ -6,6 +6,7 @@ from sensor_msgs.msg import JointState
 from can_msgs.msg import Frame
 from std_srvs.srv import Trigger
 from ros2_pony.msg import MotorFeedback, SystemStatus, InitializationStatus
+from ros2_pony.msg import JointNames
 import struct
 import math
 import threading
@@ -24,10 +25,10 @@ class JointCanConverterNode(Node):
         self.declare_parameter('device_id_start', 0x68)  # デバイスID開始値
         self.declare_parameter('num_motors', 12)  # モータ数
         self.declare_parameter('position_scale', 0.0001)  # 位置スケール係数（度→物理値）
-        self.declare_parameter('velocity_scale', 0.1)  # 速度スケール係数（ERPM→物理値）
-        self.declare_parameter('acceleration_scale', 0.1)  # 加速度スケール係数（ERPM/s2→物理値）
-        self.declare_parameter('default_velocity', 1000)  # デフォルト速度（ERPM）
-        self.declare_parameter('default_acceleration', 1000)  # デフォルト加速度（ERPM/s2）
+        self.declare_parameter('velocity_scale', 10)  # 速度スケール係数（ERPM→物理値）
+        self.declare_parameter('acceleration_scale', 10)  # 加速度スケール係数（ERPM/s2→物理値）
+        self.declare_parameter('default_velocity', 10000)  # デフォルト速度（ERPM）
+        self.declare_parameter('default_acceleration', 10000)  # デフォルト加速度（ERPM/s2）
         self.declare_parameter('homing_timeout', 30.0)  # ホーミングタイムアウト（秒）
         self.declare_parameter('debug_mode', False)  # デバッグモード
         
@@ -59,11 +60,21 @@ class JointCanConverterNode(Node):
             "rear_right_hip", "rear_right_thigh", "rear_right_calf"
         ]
         
+        # 新しいデバイスIDパターンの定義
+        self.device_ids = [
+            0x40, 0x41, 0x42,  # front_left: hip, thigh, calf
+            0x50, 0x51, 0x52,  # front_right: hip, thigh, calf
+            0x60, 0x61, 0x62,  # rear_left: hip, thigh, calf
+            0x70, 0x71, 0x72   # rear_right: hip, thigh, calf
+        ]
+        
         # デバイスIDと関節名のマッピング
         self.device_id_to_joint = {}
-        for i in range(self.num_motors):
-            device_id = self.device_id_start + i
-            self.device_id_to_joint[device_id] = self.joint_names[i]
+        for i, device_id in enumerate(self.device_ids):
+            if i < len(self.joint_names):
+                self.device_id_to_joint[device_id] = self.joint_names[i]
+        # 逆引き: 関節名 -> デバイスID
+        self.joint_to_device_id = {jn: did for did, jn in self.device_id_to_joint.items()}
         
         # デバッグログ: joint_namesとdevice_id_to_jointの内容を出力
         self.get_logger().info(f'JointCanConverterNode joint_names: {self.joint_names}')
@@ -116,6 +127,13 @@ class JointCanConverterNode(Node):
             self._can_received_callback,
             10
         )
+        # セットオリジン専用のサブスクライバ
+        self._joint_set_origin_subscription = self.create_subscription(
+            JointNames,
+            'joint_set_origin',
+            self._joint_set_origin_callback,
+            10
+        )
         
         # サービス
         self._initialize_service = self.create_service(
@@ -135,7 +153,7 @@ class JointCanConverterNode(Node):
 
     def _init_motor_states(self):
         """モータ状態の初期化."""
-        for device_id in range(self.device_id_start, self.device_id_start + self.num_motors):
+        for device_id in self.device_ids:
             self.motor_states[device_id] = {
                 'position': 0.0,  # rad
                 'velocity': 0.0,  # rad/s
@@ -179,6 +197,19 @@ class JointCanConverterNode(Node):
                     
         except Exception as e:
             self.get_logger().error(f'Error processing joint command: {e}')
+
+    def _joint_set_origin_callback(self, msg: JointNames):
+        """/joint_set_origin を受信して SetOrigin CAN を送信する."""
+        try:
+            for name in msg.name:
+                device_id = self.joint_to_device_id.get(name)
+                if device_id is None:
+                    self.get_logger().warn(f'Unknown joint name for SetOrigin: {name}')
+                    continue
+                self._send_set_origin_command(device_id)
+                self.get_logger().info(f'Sent SetOrigin for {name} (device {device_id})')
+        except Exception as e:
+            self.get_logger().error(f'Error handling joint_set_origin: {e}')
 
     def _send_motor_command(self, device_id: int, position_rad: float):
         """モータコマンドを送信する."""
@@ -234,6 +265,21 @@ class JointCanConverterNode(Node):
         except Exception as e:
             self.get_logger().error(f'Error sending motor command: {e}')
 
+    def _send_set_origin_command(self, device_id: int):
+        """SetOrigin コマンド（モードID=5、データ全0）を送信する."""
+        try:
+            can_id = (5 << 8) | device_id
+            frame_msg = Frame()
+            frame_msg.id = can_id
+            frame_msg.dlc = 8
+            frame_msg.data = [0] * 8
+            frame_msg.is_error = False
+            frame_msg.is_rtr = False
+            frame_msg.is_extended = True
+            self._can_send_publisher.publish(frame_msg)
+        except Exception as e:
+            self.get_logger().error(f'Error sending SetOrigin command: {e}')
+
     def _can_received_callback(self, msg: Frame):
         """CAN受信コールバック."""
         try:
@@ -245,9 +291,9 @@ class JointCanConverterNode(Node):
             if feedback_mode_id != 0x29:
                 return  # フィードバック以外のメッセージは無視
             
-            # デバイスIDの範囲チェック
-            if device_id < self.device_id_start or device_id >= self.device_id_start + self.num_motors:
-                return  # 範囲外のデバイスIDは無視
+            # デバイスIDの範囲チェック（新しいデバイスIDパターンに対応）
+            if device_id not in self.device_ids:
+                return  # 定義されていないデバイスIDは無視
             
             # デバッグログ
             if self.debug_mode:
@@ -476,7 +522,7 @@ class JointCanConverterNode(Node):
         
         # 現在位置の取得
         joint_positions = []
-        for device_id in range(self.device_id_start, self.device_id_start + self.num_motors):
+        for device_id in self.device_ids:
             if device_id in self.motor_states:
                 joint_positions.append(self.motor_states[device_id]['position'])
             else:
@@ -493,11 +539,11 @@ class JointCanConverterNode(Node):
         # 速度と電流の取得
         joint_velocities = []
         joint_currents = []
-        for device_id in range(self.device_id_start, self.device_id_start + self.num_motors):
+        for device_id in self.device_ids:
             if device_id in self.motor_states:
                 # 速度をrpmからrad/sに変換
                 velocity_rpm = self.motor_states[device_id].get('velocity', 0.0)
-                velocity_rad_s = math.radians(velocity_rpm / 60.0)  # rpm → rad/s
+                velocity_rad_s = math.radians(velocity_rpm / 60.0) # rpm → rad/s
                 joint_velocities.append(velocity_rad_s)
                 joint_currents.append(self.motor_states[device_id].get('current', 0.0))
             else:

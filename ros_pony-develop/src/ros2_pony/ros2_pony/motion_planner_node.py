@@ -6,6 +6,7 @@ from sensor_msgs.msg import JointState
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
 from ros2_pony.msg import MotorFeedback, SystemStatus, MotorFeedbackArray
+from ros2_pony.msg import JointNames
 import time
 from typing import Dict, List, Optional
 from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
@@ -64,6 +65,12 @@ class MotionPlannerNode(Node):
         self._motion_status_publisher = self.create_publisher(
             String,
             'motion_status',
+            10
+        )
+        # セットオリジン専用トピック
+        self._joint_set_origin_publisher = self.create_publisher(
+            JointNames,
+            'joint_set_origin',
             10
         )
         
@@ -152,6 +159,19 @@ class MotionPlannerNode(Node):
             return
         
         try:
+            # effort のみ（position が空）の場合は SetOrigin と解釈
+            if (len(msg.position) == 0) and (len(msg.effort) > 0):
+                target_names = []
+                for i, name in enumerate(msg.name):
+                    if i < len(msg.effort) and msg.effort[i] == 0.0:
+                        target_names.append(name)
+                if target_names:
+                    req = JointNames()
+                    req.name = target_names
+                    self._joint_set_origin_publisher.publish(req)
+                    self.get_logger().info(f'Published joint_set_origin for: {target_names}')
+                return
+
             # 目標角度の更新
             for i, name in enumerate(msg.name):
                 if i < len(msg.position) and name in self.joint_names:

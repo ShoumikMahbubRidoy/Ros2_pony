@@ -118,6 +118,55 @@ class CsvMessageSender(Node):
             self.get_logger().info(f'Supported types: sensor_msgs/JointState')
             return None
 
+    def _get_joint_names_for_origin(self) -> List[str]:
+        """SetOrigin送信用の関節名リストを取得.
+
+        優先度:
+        1) 読み込んだCSVのカラム名(sensor_msgs/JointState)から取得
+        2) 既定の12関節名( motion_planner_node と同一 )
+        """
+        try:
+            for csv_info in self.csv_data:
+                if csv_info.get('message_type', '').strip() == 'sensor_msgs/JointState':
+                    names = [n for n in csv_info.get('column_names', []) if n != 'timestamp']
+                    if names:
+                        return names
+        except Exception:
+            pass
+
+        return [
+            "front_left_hip", "front_left_thigh", "front_left_calf",
+            "front_right_hip", "front_right_thigh", "front_right_calf",
+            "rear_left_hip", "rear_left_thigh", "rear_left_calf",
+            "rear_right_hip", "rear_right_thigh", "rear_right_calf",
+        ]
+
+    def _send_set_origin(self, target_names: Optional[List[str]] = None):
+        """motion_planner_node が SetOrigin と解釈する JointState を送信."""
+        try:
+            names = target_names if target_names else self._get_joint_names_for_origin()
+            if not names:
+                self.get_logger().error('No joint names available for SetOrigin')
+                return
+
+            publisher = self._create_publisher('sensor_msgs/JointState', 'joint_target')
+            if not publisher:
+                self.get_logger().error('Failed to create publisher for joint_target')
+                return
+
+            msg = JointState()
+            msg.header.stamp = self.get_clock().now().to_msg()
+            msg.name = names
+            msg.position = []  # 空であることが SetOrigin 判定条件
+            msg.effort = [0.0] * len(names)  # 0.0 が指定された関節を SetOrigin 対象に
+
+            publisher.publish(msg)
+            log_message = f'Sent SetOrigin request to joint_target for joints: {names}'
+            wrapped_log = self._wrap_text(log_message, self._get_terminal_width())
+            self.get_logger().info(wrapped_log)
+        except Exception as e:
+            self.get_logger().error(f'Failed to send SetOrigin: {e}')
+
     def _play_csv_file(self, file_index: int):
         """指定されたCSVファイルを再生."""
         if file_index < 0 or file_index >= len(self.csv_data):
@@ -226,6 +275,10 @@ class CsvMessageSender(Node):
                     # Enterキーでヘルプ表示
                     elif ch == '\r' or ch == '\n':
                         self._print_usage()
+                    # 0キーで SetOrigin を送信
+                    elif ch == '0':
+                        # 再生中でも SetOrigin は即時送信（再生は継続）
+                        self._send_set_origin()
                     
                 except Exception as e:
                     self.get_logger().error(f'Input error: {e}')
@@ -275,6 +328,7 @@ class CsvMessageSender(Node):
             print(wrapped_info)
         print("\nCommands:")
         print("  [1-9]: Play corresponding CSV file (instant)")
+        print("  0: Send SetOrigin (to joint_target) for known joints")
         print("  Enter: Show this help")
         print("  Ctrl+C: Exit")
         print("========================\n")
