@@ -1,0 +1,45 @@
+🖥️ Terminal 1 — CAN bridge
+cd ~/ros_pony
+source /home/sivaxpony/venvs/venv/bin/activate
+source ~/ros_pony/install/setup.bash
+
+# Bring up CAN manually first
+sudo ip link set can0 down 2>/dev/null || true
+sudo ip link set can0 type can bitrate 1000000
+sudo ip link set can0 txqueuelen 100000
+sudo ip link set can0 up
+
+# Start the CAN bridge node
+python3 src/ros2_pony/ros2_pony/drive_usb2can_node.py --ros-args \
+  -p can_interface:=socketcan \
+  -p enable_system_setup:=false
+
+🖥️ Terminal 2 — Joint CAN converter
+cd ~/ros_pony
+source /home/sivaxpony/venvs/venv/bin/activate
+source ~/ros_pony/install/setup.bash
+
+python3 src/ros2_pony/ros2_pony/joint_can_converter_node.py --ros-args \
+  -p mode_id:=6 -p device_id_start:=104 -p num_motors:=12
+
+🖥️ Terminal 3 — Motion planner
+cd ~/ros_pony
+source /home/sivaxpony/venvs/venv/bin/activate
+source ~/ros_pony/install/setup.bash
+
+python3 src/ros2_pony/ros2_pony/motion_planner_node.py
+
+🖥️ Terminal 4 — Initialize system
+cd ~/ros_pony
+source /home/sivaxpony/venvs/venv/bin/activate
+source ~/ros_pony/install/setup.bash
+
+ros2 service call /initialize_system std_srvs/srv/Trigger "{}"
+ros2 service call /initialize_motion std_srvs/srv/Trigger "{}"
+
+🖥️ Terminal 5 — Run your CSV
+cd ~/ros_pony
+source /home/sivaxpony/venvs/venv/bin/activate
+source ~/ros_pony/install/setup.bash
+
+python3 csv_message_sender.py /home/sivaxpony/ros_pony/joint_data_20250903_124645.csv
